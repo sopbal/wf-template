@@ -62,6 +62,21 @@ process makeReport {
     """
 }
 
+process RunFastqc {
+    label "wf_fastqc"
+    input:
+        tuple val(meta), path(concat_seqs), path(stats)
+    output:
+        tuple(
+            val(meta), path("${meta.alias}.fastqc.out/seqs_fastqc.html"))
+    script:
+    """
+    mkdir ${meta.alias}.fastqc.out
+    fastqc -o ${meta.alias}.fastqc.out $concat_seqs
+
+    """
+}
+
 
 // See https://github.com/nextflow-io/nextflow/issues/1636. This is the only way to
 // publish files from a workflow whilst decoupling the publish from the process steps.
@@ -120,46 +135,49 @@ workflow pipeline {
         // We do not use variable name as assigning variable name with a tuple
         // not matching (e.g. meta, bam, bai, stats <- [meta, bam, stats]) causes
         // the workflow to crash.
-        reads = reads
-        .map{
-            it.size() == 4 ? it : [it[0], it[1], null, it[2]]
-        }
-
-        client_fields = params.client_fields && file(params.client_fields).exists() ? file(params.client_fields) : OPTIONAL_FILE
+        //reads = reads
+        //.map{
+        //    it.size() == 4 ? it : [it[0], it[1], null, it[2]]
+        //}
+        reads.view()
+        fastqc_results = RunFastqc(reads)
+        fastqc_results.view()
+        //output(fastqc_results)
+        //client_fields = params.client_fields && file(params.client_fields).exists() ? file(params.client_fields) : OPTIONAL_FILE
         software_versions = getVersions()
         workflow_params = getParams()
 
         // get metadata and stats files, keeping them ordered (could do with transpose I suppose)
-        reads.multiMap{ meta, path, index, stats ->
-            meta: meta
-            stats: stats ?: OPTIONAL_FILE
-        }.set { for_report }
-        metadata = for_report.meta.collect()
+        //reads.multiMap{ meta, path, index, stats ->
+        //    meta: meta
+        //    stats: stats ?: OPTIONAL_FILE
+        //}.set { for_report }
+        //metadata = for_report.meta.collect()
         // create a file list of the stats, and signal if its empty or not
-        stats = for_report.stats | ifEmpty(OPTIONAL_FILE) | collect | map { [it, it[0] == OPTIONAL_FILE] } 
- 
-        report = makeReport(
-            metadata,
-            stats,
-            client_fields,
-            software_versions,
-            workflow_params,
-            workflow.manifest.version
-        )
-        
+        //stats = for_report.stats | ifEmpty(OPTIONAL_FILE) | collect | map { [it, it[0] == OPTIONAL_FILE] }
+
+        //report = makeReport(
+        //    metadata,
+        //    stats,
+        //    client_fields,
+         //   software_versions,
+         //   workflow_params,
+         //   workflow.manifest.version
+        //)
+
         // replace `null` with path to optional file
-        reads
-        | map { 
-            meta, path, index, stats ->
-            [ meta, path ?: OPTIONAL_FILE, index ?: OPTIONAL_FILE, stats ?: OPTIONAL_FILE ]
-        }
-        | collectIngressResultsInDir
-    emit:
-        ingress_results = collectIngressResultsInDir.out
-        report
-        workflow_params
-        // TODO: use something more useful as telemetry
-        telemetry = workflow_params
+        //reads
+        //| map {
+        //    meta, path, index, stats ->
+        //    [ meta, path ?: OPTIONAL_FILE, index ?: OPTIONAL_FILE, stats ?: OPTIONAL_FILE ]
+        //}
+        //| collectIngressResultsInDir"""
+    //emit:
+    //    ingress_results = collectIngressResultsInDir.out
+    //    report
+    //    workflow_params
+    //    // TODO: use something more useful as telemetry
+    //    telemetry = workflow_params
 }
 
 
@@ -228,12 +246,12 @@ workflow {
     }
 
     pipeline(decorate_samples)
-    pipeline.out.ingress_results
-        | map { [it, "${params.fastq ? "fastq" : "xam"}_ingress_results"] }
-        | concat (
-            pipeline.out.report.concat(pipeline.out.workflow_params)
-                | map { [it, null] })
-        | output
+    //pipeline.out.ingress_results
+    //    | map { [it, "${params.fastq ? "fastq" : "xam"}_ingress_results"] }
+     //   | concat (
+       //     pipeline.out.report.concat(pipeline.out.workflow_params)
+         //       | map { [it, null] })
+//        | output
 }
 
 workflow.onComplete {
